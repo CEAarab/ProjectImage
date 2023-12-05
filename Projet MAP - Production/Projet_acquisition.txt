@@ -1,0 +1,15 @@
+
+Le programme Python doit servir à automatiser une étape de traitement des images .tiff ?
+
+Que doit-on faire nous ? Quelle part du travail doit-être laissée au choix de l'utilisateur ?
+
+Comment l'utilisateur choisit-il les regions of interests (ROIs) ?
+
+Le programme Python doit-il inclure le choix des ROIs ?
+
+Le nombre de couches à identifier est-il lui aussi toujours de 3 ?
+
+Le nombre de 3 ROIs était-il un choix arbitraire, peut-il y en avoir davantage ?
+
+S'il devait y avoir 4 ROIs au lieu de 3, cela ferait 32^4 combinaisons à traiter... Cette méthode est-elle réellement envisageable ?
+
