@@ -630,14 +630,19 @@ class Interface(tk.Tk):
 
 	# Sauvegarder images affichées en TIFF
 	def saveImages(self):
+	    file_path = filedialog.asksaveasfilename(
+		filetypes=[("Fichiers TIFF", "*.tiff"), ("Tous les fichiers", "*.*")],
+		initialfile="image.TIFF"
+	    )
 
-		file_path = filedialog.asksaveasfilename(filetypes=[("Fichiers TIFF", "*.tiff"), ("Tous les fichiers", "*.*")],
-												 initialfile="image.TIFF")
+	    if not file_path:  # User canceled the dialog
+		return
 
-		if len(file_path) == 0:
-			return
-			
-		cv2.imwritemulti(file_path, self.image_viewer.imagesToSave())
+	    # Check if the file has the .tiff extension; if not, append it
+	    if not file_path.lower().endswith('.tiff'):
+		file_path += '.tiff'
+
+	    cv2.imwritemulti(file_path, self.image_viewer.imagesToSave())
 
 
 	# Supprime tous les widgets d'une frame
