@@ -1,3 +1,6 @@
+    
+
+
 import tkinter as tk
 from tkinter import ttk, filedialog
 
@@ -15,6 +18,7 @@ from Interface.configuration import ConfigurationR, ConfigurationD
 
 import numpy as np
 import cv2
+from scipy.ndimage import fourier_shift
 
 import threading
 import queue
@@ -31,7 +35,7 @@ class Interface(tk.Tk):
 		super().__init__()
 
 		self.title("Analyse multispectrale")
-		self.wm_state("zoomed")
+		self.attributes("-fullscreen", True)
 		self.update()
 		# print(self.winfo_width(), self.winfo_height())
 		# print(self.winfo_screenwidth(), self.winfo_screenheight())
@@ -130,7 +134,7 @@ class Interface(tk.Tk):
 		self.frame_menu.pack_propagate(False)
 
 		self.btn_registration = ttk.Button(self.frame_menu, takefocus=False, text='Recalage',
-										   cursor='hand2', command=self.displayMenuRegistration, style='M.TButton')
+										   cursor='hand2', command=self.registrationImage, style='M.TButton')
 
 		self.btn_fausses_couleurs = ttk.Button(self.frame_menu, takefocus=False, text='Fausses couleurs',
 										   	   cursor='hand2', command=self.displayMenuFaussesCouleurs, style='M.TButton')
@@ -148,6 +152,7 @@ class Interface(tk.Tk):
 
 
 	# Menu pour la registration
+		'''
 	def displayMenuRegistration(self):
 
 		self.clearFrame(self.frame_menu, unpack=True)
@@ -159,6 +164,7 @@ class Interface(tk.Tk):
 		self.var_entry = tk.StringVar()
 		self.entry_im_ref = ttk.Entry(self.frame_imref, width=15)
 		self.entry_im_ref.insert(0, '1')
+
 		self.btn_enter_registration = ttk.Button(self.frame_menu, takefocus=False, cursor='hand2',
 												 text="Entrer", command=self.registrationImage, style='M.TButton')
 
@@ -171,7 +177,7 @@ class Interface(tk.Tk):
 
 		self.btn_enter_registration.pack(side='bottom', pady=PAD, padx=PAD, fill='x', ipady=PAD)
 
-
+'''
 	# Retourne au menu principal
 	def backToMainMenu(self):
 
@@ -405,46 +411,79 @@ class Interface(tk.Tk):
 		self.img_tiff_data['ImageLength'] = self.img_tiff_data['ImageLength'][0]
 		self.img_tiff_data['NbFrame'] = self.img_tiff.n_frames
 
-
-	# Démarre l'algorithme de recalage des images
-	def registrationImage(self):
-
-		try :
-			num_img_ref = int(self.entry_im_ref.get()) - 1
-		except:
-			return
-
-		self.queue_registration = queue.Queue()
-		self.queue_offset = queue.Queue()
-		self.tiff_registred = []
-		self.offsets = []
-
+	def commando(self):
 		self.displayProgressBar("Recalage des images")
-		
-		# Registration
-		self.thread_registration = threading.Thread(target=registration,
-													args=(self.tiff_array_8bits, self.queue_registration, self.queue_offset, num_img_ref))
-		self.thread_registration.start()
+		for i in range(10):
+			self.registrationImage(i)
+	# Démarre l'algorithme de recalage des images
+	
 
-		# Pendant l'algorithme
-		while len(self.tiff_registred) < self.image_viewer.nb_frame:
-			try:
-				r = self.queue_registration.get(timeout=2)
-				o = self.queue_offset.get(timeout=2)
-			except queue.Empty:
-				pass
-			else:
-				self.tiff_registred.append(r)
-				self.offsets.append(o)
+
+	def registrationImage(self):
+		try:
+			self.queue_registration = queue.Queue()
+			self.queue_offset = queue.Queue()
+			self.tiff_registred = []
+			self.offsets = []
+
+			self.displayProgressBar("Recalage des images")
+
+			# Use the middle image as the reference
+			reference_index = len(self.tiff_array_8bits) // 2
+			reference_image = self.tiff_array_8bits[reference_index]
+
+			# Iterate over other images and perform registration using Lucas-Kanade optical flow
+			for i, image in enumerate(self.tiff_array_8bits):
+				if i == reference_index:
+					continue  # Skip the reference image itself
+
+				# Convert images to grayscale if reference_image
+				reference_gray = cv2.cvtColor(reference_image, cv2.COLOR_BGR2GRAY) if len(reference_image.shape) == 3 else reference_image
+				image_to_align_gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY) if len(image.shape) == 3 else image
+
+				# Find the size of the images
+				sz = reference_gray.shape[::-1]
+
+				# Set the warp mode to use ECC for robust registration
+				warp_mode = cv2.MOTION_EUCLIDEAN
+
+				# Define the warp matrix
+				warp_matrix = np.eye(2, 3, dtype=np.float32)
+
+				# Specify the number of iterations and the threshold for convergence
+				number_of_iterations = 200
+				termination_eps = 1e-4
+
+				try:
+					# Run the ECC algorithm with a timeout
+					criteria = (cv2.TERM_CRITERIA_EPS | cv2.TERM_CRITERIA_COUNT, number_of_iterations, termination_eps)
+					cc, warp_matrix = cv2.findTransformECC(reference_gray, image_to_align_gray, warp_matrix, warp_mode, criteria, None, 5)
+
+					# Apply the found transformation to align images
+					aligned_image = cv2.warpAffine(image, warp_matrix, sz, flags=cv2.INTER_LINEAR + cv2.WARP_INVERSE_MAP)
+
+				except Exception as e:
+					print(f"Error in align_images: {e}")				
+				# Append aligned image and offset
+				self.tiff_registred.append(aligned_image)
+				self.offsets.append([0, 0])  # Lucas-Kanade does not return explicit offsets
 				self.updateProgressBar(100/self.image_viewer.nb_frame)
 
-		# Met à jour l'affichage à la fin de l'algo
-		self.is_FC_display = False
-		self.clearFrame(self.frame_main, unpack=True)
-		self.displayFrameMain()
-		self.image_viewer.updateImages(self.tiff_registred)
-		self.image_viewer.displayImage()
-		self.backToMainMenu()
+			# Update progress bar
+			self.updateProgressBar(100)
+
+			# Update the display
+			self.is_FC_display = False
+			self.clearFrame(self.frame_main, unpack=True)
+			self.displayFrameMain()
+			self.image_viewer.updateImages(self.tiff_registred)
+			self.image_viewer.displayImage()
+			self.backToMainMenu()
+
+		except Exception as e:
+			# Handle exceptions appropriately
+			print(f"Error in registrationImage: {e}")
+
 
 
 	# Démarre l'algorithme des fausses couleurs
@@ -475,17 +514,17 @@ class Interface(tk.Tk):
 		except:
 			if self.parameters.nb_ROIS == 2:
 				self.thread_FC = threading.Thread(target=fausseCouleur2Points,
-					  			  args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS))
+								args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS))
 			elif self.parameters.nb_ROIS == 3:
 				self.thread_FC = threading.Thread(target=fausseCouleur,
-									  			  args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS))
+												args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS))
 		else:
 			if self.parameters.nb_ROIS == 2:
 				self.thread_FC = threading.Thread(target=fausseCouleur2Points,
-					  			  args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS, img_registred))
+								args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS, img_registred))
 			elif self.parameters.nb_ROIS == 3:
 				self.thread_FC = threading.Thread(target=fausseCouleur,
-									  			  args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS, img_registred))
+												args=(self.tiff_array_16bits, self.queue_FC, coord, offsets, self.parameters.size_ROIS, img_registred))
 
 		self.thread_FC.start()
 
@@ -630,19 +669,19 @@ class Interface(tk.Tk):
 
 	# Sauvegarder images affichées en TIFF
 	def saveImages(self):
-	    file_path = filedialog.asksaveasfilename(
+		file_path = filedialog.asksaveasfilename(
 		filetypes=[("Fichiers TIFF", "*.tiff"), ("Tous les fichiers", "*.*")],
 		initialfile="image.TIFF"
-	    )
+		)
 
-	    if not file_path:  # User canceled the dialog
-		return
+		if not file_path:  # User canceled the dialog
+			return
 
-	    # Check if the file has the .tiff extension; if not, append it
-	    if not file_path.lower().endswith('.tiff'):
-		file_path += '.tiff'
+		# Check if the file has the .tiff extension; if not, append it
+		if not file_path.lower().endswith('.tiff'):
+			file_path += '.tiff'
 
-	    cv2.imwritemulti(file_path, self.image_viewer.imagesToSave())
+		cv2.imwritemulti(file_path, self.image_viewer.imagesToSave())
 
 
 	# Supprime tous les widgets d'une frame
