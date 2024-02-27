@@ -1,6 +1,3 @@
-    
-
-
 import tkinter as tk
 from tkinter import ttk, filedialog
 
@@ -35,7 +32,7 @@ class Interface(tk.Tk):
 		super().__init__()
 
 		self.title("Analyse multispectrale")
-		self.attributes("-fullscreen", True)
+		self.attributes("-fullscreen", False)
 		self.update()
 		# print(self.winfo_width(), self.winfo_height())
 		# print(self.winfo_screenwidth(), self.winfo_screenheight())
