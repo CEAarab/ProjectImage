@@ -135,6 +135,8 @@ class Interface(tk.Tk):
 
 		self.btn_registration = ttk.Button(self.frame_menu, takefocus=False, text='Recalage',
 										   cursor='hand2', command=self.registrationImage, style='M.TButton')
+		self.btn_registration_auto = ttk.Button(self.frame_menu, takefocus=False, text='Recalage Referentiel',
+										   cursor='hand2', command=self.displayMenuRegistration, style='M.TButton')
 
 		self.btn_fausses_couleurs = ttk.Button(self.frame_menu, takefocus=False, text='Fausses couleurs',
 										   	   cursor='hand2', command=self.displayMenuFaussesCouleurs, style='M.TButton')
@@ -147,12 +149,13 @@ class Interface(tk.Tk):
 
 		self.frame_menu.pack(side='right', fill='y')
 		self.btn_registration.pack(fill='x', ipady=PAD)
+		self.btn_registration_auto.pack(fill='x', ipady=PAD)
 		self.btn_fausses_couleurs.pack(fill='x', ipady=PAD)
 		self.btn_cube_MS.pack(fill='x', ipady=PAD)
 
 
 	# Menu pour la registration
-		'''
+		
 	def displayMenuRegistration(self):
 
 		self.clearFrame(self.frame_menu, unpack=True)
@@ -166,7 +169,7 @@ class Interface(tk.Tk):
 		self.entry_im_ref.insert(0, '1')
 
 		self.btn_enter_registration = ttk.Button(self.frame_menu, takefocus=False, cursor='hand2',
-												 text="Entrer", command=self.registrationImage, style='M.TButton')
+												 text="Entrer", command=self.registrationImage2, style='M.TButton')
 
 		self.frame_menu.pack(side='right', fill='y')
 		self.btn_back.pack(anchor='w', side='top')
@@ -177,7 +180,45 @@ class Interface(tk.Tk):
 
 		self.btn_enter_registration.pack(side='bottom', pady=PAD, padx=PAD, fill='x', ipady=PAD)
 
-'''
+	def registrationImage2(self):
+
+		try :
+			num_img_ref = int(self.entry_im_ref.get()) - 1
+		except:
+			return
+
+		self.queue_registration = queue.Queue()
+		self.queue_offset = queue.Queue()
+		self.tiff_registred = []
+		self.offsets = []
+
+		self.displayProgressBar("Recalage des images")
+		
+		# Registration
+		self.thread_registration = threading.Thread(target=registration,
+													args=(self.tiff_array_8bits, self.queue_registration, self.queue_offset, num_img_ref))
+		self.thread_registration.start()
+
+		# Pendant l'algorithme
+		while len(self.tiff_registred) < self.image_viewer.nb_frame:
+			try:
+				r = self.queue_registration.get(timeout=2)
+				o = self.queue_offset.get(timeout=2)
+			except queue.Empty:
+				pass
+			else:
+				self.tiff_registred.append(r)
+				self.offsets.append(o)
+				self.updateProgressBar(100/self.image_viewer.nb_frame)
+
+		# Met à jour l'affichage à la fin de l'algo
+		self.is_FC_display = False
+		self.clearFrame(self.frame_main, unpack=True)
+		self.displayFrameMain()
+		self.image_viewer.updateImages(self.tiff_registred)
+		self.image_viewer.displayImage()
+		self.backToMainMenu()
+
 	# Retourne au menu principal
 	def backToMainMenu(self):
 
@@ -434,8 +475,7 @@ class Interface(tk.Tk):
 
 			# Iterate over other images and perform registration using Lucas-Kanade optical flow
 			for i, image in enumerate(self.tiff_array_8bits):
-				if i == reference_index:
-					continue  # Skip the reference image itself
+				
 
 				# Convert images to grayscale if reference_image
 				reference_gray = cv2.cvtColor(reference_image, cv2.COLOR_BGR2GRAY) if len(reference_image.shape) == 3 else reference_image
