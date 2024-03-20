@@ -398,32 +398,33 @@ class ConfigurationD(tk.Toplevel):
 		# Créer une liste pour stocker les points des lignes horizontales et verticales
 		subdivided_points = []
 
-		self.rowsSizes = np.zeros(self.nRows)
-		self.colsSizes = np.zeros(self.nCols)
+		self.rowSize = np.zeros(self.nRows)
+		self.colSize = np.zeros(self.nCols)
 
 		# Diviser les côtés du quadrilatère en nCols points
-		for i in range(self.nCols):
-
-			x1 = self.polygon[0][0] + ((2*i+1) * (self.polygon[1][0] - self.polygon[0][0]) / (2 * self.nCols))
-			y1 = self.polygon[0][1] + ((2*i+1) * (self.polygon[1][1] - self.polygon[0][1]) / (2 * self.nCols))
-
-			x2 = self.polygon[3][0] + ((2*i+1) * (self.polygon[2][0] - self.polygon[3][0]) / (2 * self.nCols))
-			y2 = self.polygon[3][1] + ((2*i+1) * (self.polygon[2][1] - self.polygon[3][1]) / (2 * self.nCols))
-
-			self.colsSizes[i] = (y2-y1)/self.nCols
-
-			# On ne s'intéresse qu'aux points situés à l'intérieur du quadrilatère, pas ses côtés
-			for j in range(self.nRows):
-				x = x1 + (2*j+1) * (x2 - x1) / (2 * self.nRows)
-				y = y1 + (2*j+1) * (y2 - y1) / (2 * self.nRows)
-				subdivided_points.append((x, y))
-
 		for j in range(self.nRows):
 
 			x1 = self.polygon[0][0] + ((2*j+1) * (self.polygon[3][0] - self.polygon[0][0]) / (2 * self.nRows))
-			x2 = self.polygon[1][0] + ((2*j+1) * (self.polygon[2][0] - self.polygon[1][0]) / (2 * self.nRows))
+			y1 = self.polygon[0][1] + ((2*j+1) * (self.polygon[3][1] - self.polygon[0][1]) / (2 * self.nRows))
 
-			self.rowsSizes[j] = (x2-x1)/(2 * self.nRows)
+			x2 = self.polygon[1][0] + ((2*j+1) * (self.polygon[2][0] - self.polygon[1][0]) / (2 * self.nRows))
+			y2 = self.polygon[1][1] + ((2*j+1) * (self.polygon[2][1] - self.polygon[1][1]) / (2 * self.nRows))
+
+
+			self.rowSize[j] = (x2-x1)/(2 * self.nCols)
+
+			# On ne s'intéresse qu'aux points situés à l'intérieur du quadrilatère, pas ses côtés
+			for i in range(self.nCols):
+				x = x1 + (2*i+1) * (x2 - x1) / (2 * self.nCols)
+				y = y1 + (2*i+1) * (y2 - y1) / (2 * self.nCols)
+				subdivided_points.append((x, y))
+
+
+		for i in range(self.nCols):
+
+			y1 = self.polygon[0][1] + ((2*i+1) * (self.polygon[1][1] - self.polygon[0][1]) / (2 * self.nRows))
+			y2 = self.polygon[3][1] + ((2*i+1) * (self.polygon[2][1] - self.polygon[3][1]) / (2 * self.nRows))
+			self.colSize[i] = (y2-y1)/(2 * self.nRows)
 
 		return subdivided_points
 
@@ -442,29 +443,58 @@ class ConfigurationD(tk.Toplevel):
 	def drawPolygon(self):
 		# Draw the polygon on the image viewer
 		self.image_viewer.delete('polygon')
+		self.image_viewer.delete('selectionGrid')
 		if len(self.polygon) > 1:
 			self.image_viewer.create_polygon(self.polygon, outline="red", fill="", tag="polygon")
 
 
 
 	def drawGrid(self):
-		# Draw the grid on the image viewer
+		# Draw the grid on the image viewer AND get the values in the CSV file
 		self.image_viewer.delete('selectionGrid')
-
-		for k in range(self.nRows * self.nCols):
+				
+		gridSize = self.nCols * self.nRows
+		temp = []
+		for k in range(gridSize):
 			point = self.selectionGrid[k]
-			indexj = k // self.nCols
-			indexi = k % self.nCols
+			indexi = k // self.nCols
+			indexj = k % self.nCols
 
-			print(indexi, " ;", indexj, "\n")
+			topleft = point[0] - self.rowsScale * self.rowSize[indexi], point[1] - self.colsScale * self.colSize[indexj]
+			bottomright = point[0] + self.rowsScale * self.rowSize[indexi], point[1] + self.colsScale * self.colSize[indexj]
+			self.image_viewer.create_rectangle(topleft[0], topleft[1], bottomright[0], bottomright[1], outline="blue", fill="", tag="selectionGrid")
+			temp.append([topleft, bottomright])
 
-			self.image_viewer.create_rectangle(point[0]-self.colsScale * self.colsSizes[indexi], point[1] + self.rowsScale * self.rowsSizes[indexj], point[0] + self.colsScale * self.colsSizes[indexi], point[1] - self.rowsScale * self.rowsSizes[indexj], outline="green", fill="", tag="selectionGrid")
+
+		# re-order the boxes in temp
+		for i in range(self.nRows//2):
+			for j in range(self.nCols//2):
+				index1 = (2*i+1)*self.nCols +j
+				index2 = 2*(i+1)*(self.nCols) - (j+1)
+				temp[index1], temp[index2] = temp[index2], temp[index1]
+
+		for k in range(gridSize):
+			# for each box, take the "starts" and "end" x-y values
+			# then cnvert them to int
+			start = np.round(temp[k][0])
+			start = (int(start[0]), int(start[1]))
+			end = np.round(temp[k][1])
+			end = (int(end[0]), int(end[1]))
+
+			# To display the values if there is a problem
+			'''
+			print(k)
+			print("start, ", start)
+			print("end, ", end)
+			'''
+			self.moy(start, end)
 
 
 
 
-	# Moyenne de la valeur des pixel dans le carré sélectionné ; cas manuel
-	def moy_manual(self, start, end):
+
+	# Moyenne de la valeur des pixel dans le carré sélectionné ; cas d'un rectangle
+	def moy(self, start, end):
 
 		for i in range(len(self.img)):
 			square = self.img[i][start[1]:end[1], start[0]:end[0]]
@@ -475,17 +505,7 @@ class ConfigurationD(tk.Toplevel):
 		self.tableau.insert('', str(self.patche_num), 'Image'+ str(self.patche_num), values=tuple(self.D[self.patche_num]))
 		self.patche_num += 1
 	
-	# Moyenne de la valeur des pixel dans le carré sélectionné ; cas automatique
-	def moy_autom(self, start, end):
 
-		for i in range(len(self.img)):
-			poly = self.img[i][start[1]:end[1], start[0]:end[0]]
-			if 0 in poly.shape: # Si rectangle vide
-				return
-			self.D[self.patche_num, i] = np.mean(poly)
-
-		self.tableau.insert('', str(self.patche_num), 'Image'+ str(self.patche_num), values=tuple(self.D[self.patche_num]))
-		self.patche_num += 1
 
 if __name__ == '__main__':
 
