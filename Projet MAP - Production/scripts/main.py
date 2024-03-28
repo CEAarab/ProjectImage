@@ -701,7 +701,7 @@ class Interface(tk.Tk):
 			return
 		else:
 			for canva in self.image_viewer.canvas_points:
-				canvas_points.config(width=self.parameters.size_ROIS+1, height=self.parameters.size_ROIS+1)
+				canva.config(width=self.parameters.size_ROIS+1, height=self.parameters.size_ROIS+1)
 
 
 	# Sauvegarder images affichées en TIFF
