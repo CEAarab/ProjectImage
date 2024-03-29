@@ -138,9 +138,9 @@ class ConfigurationD(tk.Toplevel):
 		self.selectionGrid = None
 		self.nRows = 4
 		self.nCols = 6
-		self.rowsScale = 0.7
+		self.rowsScale = 0.6 #linked to width parameter in app
 		self.rowsSizes = None
-		self.colsScale = 0.7
+		self.colsScale = 0.6 #linked to heigth parameter in app
 		self.colsSizes = None
 
 
@@ -285,19 +285,14 @@ class ConfigurationD(tk.Toplevel):
 		self.drawRect()
 		self.rect_coords = self.image_viewer.coords('rect')
 
-		# Prend en compte le redimensionnement de l'image pour les coordonnées du rectangle
 		for i in range(len(self.rect_coords)):
 			if i%2 == 0:
 				self.rect_coords[i] = int(self.rect_coords[i] / self.image_viewer.x_scale)
 			else:
 				self.rect_coords[i] = int(self.rect_coords[i] / self.image_viewer.y_scale)
 
-		if self.manual_selection : # En cas de sélection manuelle
-			if self.patche_num < 24:
-				self.moy_manual(self.rect_coords[0:2], self.rect_coords[-2:])
-		else :
-			if self.patche_num < 24:  # En cas de sélection automatique
-				self.moy_auto(self.polygon)
+		if self.patche_num < 24:
+			self.moy(self.rect_coords[0:2], self.rect_coords[-2:])
 
 		self.rect_start = None
 		self.rect_end = None
@@ -316,22 +311,18 @@ class ConfigurationD(tk.Toplevel):
 
 	def onClick_autom(self, event):
 
-		if len(self.polygon)==5 : # commence un nouveau tracé au 6ème point cliqué
-			self.polygon = []
-	
 
+	
+		'''
 		# Add the clicked point to the polygon
 		if len(self.polygon)==0 :
 			self.drawLock=False
-			self.polygon.append((event.x, event.y))
 			#? self.waitConfirm = False
 
-
-
-			## demander confirmation à la fin du dessin
-			## dessiner les subdivisions
-			## proposer de repositionner les points
-			## voir ci-dessous
+		if len(self.polygon)==5 : # exception len(polygon) is somehow greater than 4
+			self.polygon = []
+		'''
+		pass
 
 	'''
 	def onDrag_autom(self, event):
@@ -342,21 +333,26 @@ class ConfigurationD(tk.Toplevel):
 
 	def whenDrawing(self, event) :
 		self.drawLock = False #débloquer le dessin après un mouvement de souris
-		if (len(self.polygon) > 0) and (len(self.polygon) < 5):
-			self.polygon[-1] = (event.x, event.y)
+		if (len(self.polygon) > 0) and (len(self.polygon) < 4):
+			self.polygon.append((event.x, event.y))
 			self.drawPolygon()
+			self.polygon.pop()
 		
 
 	def onRelease_autom(self, event):
 
+
+		if self.drawLock == False : #un point ne sera pas validé que si la souris a bougé
+			self.polygon.append((event.x, event.y))
+			self.drawLock = True  # Bloquage de la fonction de dessin jusqu'au prochain mouvement de souris
+		
+		
 		if len(self.polygon) == 4: #?   not(self.waitConfirm) and 
 
 			self.sortCorners()
 			self.drawPolygon()
-			self.polygon.append((0, 0))
-
 			# Adapte la grille au quadrilatère tracé, selon les paramètres donnés
-			self.selectionGrid = self.calculateGrid()
+			self.selectionGrid = self.createGrid()
 			# Clear the drawn polygon
 			'''self.image_viewer.delete('polygon')'''
 			# Clear the corners list
@@ -366,11 +362,8 @@ class ConfigurationD(tk.Toplevel):
 			## jauges d'ajustement des paramètres
 			self.drawGrid()
 			#? self.waitConfirm = True
-
-		else :
-			if self.drawLock == False : #un point ne sera pas validé que si la souris a bougé
-				self.polygon.append((event.x, event.y))
-				self.drawLock = True  # Bloquage de la fonction de dessin jusqu'au prochain mouvement de souris
+			self.polygon = []
+			self.drawLock = False
 
 
 
@@ -379,22 +372,26 @@ class ConfigurationD(tk.Toplevel):
 	# En sortie, la liste parcourt dans le sens horaire en partant d'en haut à gauche
 	def sortCorners(self):
 
-		self.polygon = sorted(self.polygon, key = lambda point : point[1]) #tri les points du plus haut au plus bas
+		self.polygon = sorted(self.polygon, key = lambda point : point[0]) #tri les points du plus à gauche au plus droite
 
-		if self.polygon[1][0] < self.polygon[0][0] :
+		if self.polygon[1][1] < self.polygon[0][1] :
 			c = self.polygon[1]
 			self.polygon[1] = self.polygon[0]
 			self.polygon[0] = c
-
-		if self.polygon[3][0] > self.polygon[2][0] :
+		
+		if self.polygon[3][1] > self.polygon[2][1] :
 			c = self.polygon[3]
 			self.polygon[3] = self.polygon[2]
 			self.polygon[2] = c
 
+		c = self.polygon[1]
+		self.polygon[1] = self.polygon[3]
+		self.polygon[3] = c
+		
 
 
 
-	def calculateGrid(self):
+	def createGrid(self):
 		# Créer une liste pour stocker les points des lignes horizontales et verticales
 		subdivided_points = []
 
@@ -419,13 +416,20 @@ class ConfigurationD(tk.Toplevel):
 				y = y1 + (2*i+1) * (y2 - y1) / (2 * self.nCols)
 				subdivided_points.append((x, y))
 
-
+		
 		for i in range(self.nCols):
-
 			y1 = self.polygon[0][1] + ((2*i+1) * (self.polygon[1][1] - self.polygon[0][1]) / (2 * self.nRows))
 			y2 = self.polygon[3][1] + ((2*i+1) * (self.polygon[2][1] - self.polygon[3][1]) / (2 * self.nRows))
 			self.colSize[i] = (y2-y1)/(2 * self.nRows)
-
+		'''
+		# new method : doesn't work perfectly either lol
+		left_height = self.polygon[3][1] - self.polygon[0][1]
+		right_height = self.polygon[2][1] - self.polygon[1][1]
+		h_ratio = right_height / left_height
+		
+		for i in range(self.nCols):
+			self.colSize[i] = ((2*i+1) * left_height + (self.nRows - 2*i+1) * right_height) / (2 * self.nRows)
+		'''
 		return subdivided_points
 
 
@@ -452,9 +456,13 @@ class ConfigurationD(tk.Toplevel):
 	def drawGrid(self):
 		# Draw the grid on the image viewer AND get the values in the CSV file
 		self.image_viewer.delete('selectionGrid')
-				
+		self.D = np.zeros_like(self.D)
+		self.tableau.delete(*self.tableau.get_children())
+		self.patche_num = 0
+	
 		gridSize = self.nCols * self.nRows
 		temp = []
+
 		for k in range(gridSize):
 			point = self.selectionGrid[k]
 			indexi = k // self.nCols
@@ -465,23 +473,30 @@ class ConfigurationD(tk.Toplevel):
 			self.image_viewer.create_rectangle(topleft[0], topleft[1], bottomright[0], bottomright[1], outline="blue", fill="", tag="selectionGrid")
 			temp.append([topleft, bottomright])
 
-
+		'''
+		
 		# re-order the boxes in temp
+
+		# actually no, my bad lol
+
 		for i in range(self.nRows//2):
 			for j in range(self.nCols//2):
 				index1 = (2*i+1)*self.nCols +j
 				index2 = 2*(i+1)*(self.nCols) - (j+1)
 				temp[index1], temp[index2] = temp[index2], temp[index1]
 
-		for k in range(gridSize):
-			# for each box, take the "starts" and "end" x-y values
-			# then cnvert them to int
-			start = np.round(temp[k][0])
-			start = (int(start[0]), int(start[1]))
-			end = np.round(temp[k][1])
-			end = (int(end[0]), int(end[1]))
+		'''
 
-			# To display the values if there is a problem
+		for k in range(gridSize):
+			# for each box, take the "start" and "end" x-y values
+			start = np.round(temp[k][0])
+			end = np.round(temp[k][1])
+
+			# then fix the pixel alignement (due to window scaling), and convert the result to int
+			start = (int(start[0]/self.image_viewer.x_scale), int(start[1]/self.image_viewer.y_scale))
+			end = (int(end[0]/self.image_viewer.x_scale), int(end[1]/self.image_viewer.y_scale))
+
+			# display the values to debug
 			'''
 			print(k)
 			print("start, ", start)
@@ -495,7 +510,6 @@ class ConfigurationD(tk.Toplevel):
 
 	# Moyenne de la valeur des pixel dans le carré sélectionné ; cas d'un rectangle
 	def moy(self, start, end):
-
 		for i in range(len(self.img)):
 			square = self.img[i][start[1]:end[1], start[0]:end[0]]
 			if 0 in square.shape: # Si rectangle vide
@@ -504,7 +518,7 @@ class ConfigurationD(tk.Toplevel):
 
 		self.tableau.insert('', str(self.patche_num), 'Image'+ str(self.patche_num), values=tuple(self.D[self.patche_num]))
 		self.patche_num += 1
-	
+
 
 
 if __name__ == '__main__':
