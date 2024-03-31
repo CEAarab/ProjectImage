@@ -144,11 +144,11 @@ class ConfigurationD(tk.Toplevel):
 		self.nRows = 4
 		self.nCols = 6
 
-		self.rowsScale = 0.6 #linked to width parameter in app
+		self.rowsScale = None #linked to width parameter in app
 		self.scale1 = None
 		self.rowsSizes = None
 
-		self.colsScale = 0.6 #linked to heigth parameter in app
+		self.colsScale = None #linked to heigth parameter in app
 		self.scale2 = None
 		self.colsSizes = None
 
@@ -164,6 +164,7 @@ class ConfigurationD(tk.Toplevel):
 
 		self.sel_button = None
 		self.initWidget()
+		
 
 
 	def initWidget(self):
@@ -193,6 +194,10 @@ class ConfigurationD(tk.Toplevel):
 
 		self.frame_info = tk.Frame(self)
 		self.frame_info.pack(side='right',padx=PAD)
+
+		self.bind("<Return>", self.validatePatches) #entrée permet aussi de valider
+		self.bind("<Escape>", self.cancel_drawing) #annuler le dessin en cours pour recommencer
+
 		
 
 	#Passer entre les modes manuel et automatique de sélection des patchs
@@ -261,10 +266,10 @@ class ConfigurationD(tk.Toplevel):
 			# Curseurs pour modifier les paramètres du tracé
 			# Créer un curseur (Scale) allant de 0 à 1
 			self.scale1 = tk.Scale(self.frame_info, from_=0, to=100, label="Hauteur des cases", resolution=1, orient="horizontal", command=self.update_colsScale)
-			self.scale1.set(130*self.colsScale-0.15)
+			self.scale1.set(50)
 			self.scale1.pack(side = 'bottom')
 			self.scale2 = tk.Scale(self.frame_info, from_=0, to=100, label="Largeur des cases", resolution=1, orient="horizontal", command=self.update_rowsScale)
-			self.scale2.set(130*self.rowsScale-0.15)
+			self.scale2.set(50)
 			self.scale2.pack(side = 'bottom')
 
 			self.image_viewer.delete('rect')
@@ -290,20 +295,20 @@ class ConfigurationD(tk.Toplevel):
 
 
 	def update_colsScale(self, value) :
-		self.colsScale = 0.15 + float(value)/130
+		self.colsScale = 0.2 + float(value)/160
 		if self.selectionGrid != None :
 			self.drawGrid()
 	
 
 	def update_rowsScale(self, value) :
-		self.rowsScale = 0.15 + float(value)/130
+		self.rowsScale = 0.2 + float(value)/160
 		if self.selectionGrid != None :
 			self.drawGrid()
 
 	
 
 	# Met à jour la matrice D et calcule la matrice Q
-	def validatePatches(self):
+	def validatePatches(self, any):
 		
 		self.parameters.D = self.D
 		#np.savetxt('mon_tableau_mac_50.csv', self.D, delimiter=',')
@@ -316,14 +321,7 @@ class ConfigurationD(tk.Toplevel):
 		except AttributeError:
 			pass
 
-
-	def deleteLigne(self, event):
-
-		sel = self.tableau.selection()
-		self.patche_num -= 1
-		for item in sel:
-			self.tableau.delete(item)
-			self.displayTableau()
+			
 
 
 	# Fenêtre d'aide pour l'utilisateur
@@ -349,39 +347,74 @@ class ConfigurationD(tk.Toplevel):
 			pass
 
 
+	def cancel_drawing(self, any):
+		if self.manual_selection :
+			if self.rect_start != None :
+				self.drawLock = True
+			else :
+				self.deleteLigne(noSelection=True)
+			self.image_viewer.delete('rect')
+	
+		else :
+			self.polygon = []
+			self.image_viewer.delete('polygon')
+			self.tableau.delete(*self.tableau.get_children())
+			self.image_viewer.delete('selectionGrid')
 
+
+
+	def deleteLigne(self, event = None, noSelection = False):
+		if noSelection :
+			#Sélectionnera la dernière ligne en l'absence d'argument (cas de la touche 'Escape')	
+			id_list = self.tableau.get_children()
+			if len(id_list) == 0 :
+				pass
+			else :
+				self.tableau.selection_set(id_list[-1])
+		sel = self.tableau.selection()
+
+		#Supprime l'élément sélectionné
+		self.patche_num -= 1
+		for item in sel:
+			self.tableau.delete(item)
+
+			
 
 	# Fonctions pour dessiner les cadres de sélection des patchs
 		
 	## Méthode manuelle conservée comme alternative pour dépanner
 
 	def onClick_manual(self, event):
-
+		self.drawLock = False
 		self.rect_start = (event.x, event.y)
 
 
 	def onDrag_manual(self, event):
-		self.rect_end = (event.x, event.y)
-		self.drawRect()
+		if not(self.drawLock) :
+			self.rect_end = (event.x, event.y)
+			self.drawRect()
 
 
 	def onRelease_manual(self, event):
+		
+		if self.drawLock :
+			self.drawLock = False
+		else :
+			self.rect_end = (event.x, event.y)
+			self.drawRect()
+			self.rect_coords = self.image_viewer.coords('rect')
 
-		self.rect_end = (event.x, event.y)
-		self.drawRect()
-		self.rect_coords = self.image_viewer.coords('rect')
+			for i in range(len(self.rect_coords)):
+				if i%2 == 0:
+					self.rect_coords[i] = int(self.rect_coords[i] / self.image_viewer.x_scale)
+				else:
+					self.rect_coords[i] = int(self.rect_coords[i] / self.image_viewer.y_scale)
 
-		for i in range(len(self.rect_coords)):
-			if i%2 == 0:
-				self.rect_coords[i] = int(self.rect_coords[i] / self.image_viewer.x_scale)
-			else:
-				self.rect_coords[i] = int(self.rect_coords[i] / self.image_viewer.y_scale)
+			if self.patche_num < 24:
+				self.moy(self.rect_coords[0:2], self.rect_coords[-2:])
 
-		if self.patche_num < 24:
-			self.moy(self.rect_coords[0:2], self.rect_coords[-2:])
-
-		self.rect_start = None
-		self.rect_end = None
+			self.rect_start = None
+			self.rect_end = None
 
 
 	def drawRect(self):
@@ -396,14 +429,6 @@ class ConfigurationD(tk.Toplevel):
 	## méthode à favoriser : positionner un point aux quatre coins de la grille et obtenir immédiatement la grille adaptée
 
 	def onClick_autom(self, event):
-			#inutile dans la configuration actuelle
-
-	
-		'''
-		if len(self.polygon)==0 :
-			self.drawLock=False
-			#? self.waitConfirm = False
-		'''
 		if len(self.polygon)==4 : # start to make a new polygon
 			self.image_viewer.delete('polygon')
 			self.polygon = []
@@ -427,7 +452,7 @@ class ConfigurationD(tk.Toplevel):
 			self.drawLock = True  # Bloquage de la fonction de dessin jusqu'au prochain mouvement de souris
 		
 		
-		if len(self.polygon) == 4: #?   not(self.waitConfirm) and 
+		if len(self.polygon) == 4:
 
 			self.sortCorners()
 			self.drawPolygon()
@@ -435,22 +460,8 @@ class ConfigurationD(tk.Toplevel):
 			self.selectionGrid = self.createGrid()
 			
 			self.drawGrid()
-			#? self.waitConfirm = True
-
-			'''
-			
-			
-			
-			
-			
-			
-			self.polygon = []
 
 
-
-
-
-			'''
 
 
 
@@ -517,16 +528,6 @@ class ConfigurationD(tk.Toplevel):
 			self.colSize[i] = ((2*i+1) * left_height + (self.nRows - 2*i+1) * right_height) / (2 * self.nRows)
 		'''
 		return subdivided_points
-
-
-					
-	def drawQuad(self):
-		
-		self.image_viewer.delete('rect')
-		if self.rect_start and self.rect_end:
-			x0, y0 = self.rect_start
-			x1, y1 = self.rect_end
-			self.image_viewer.create_rectangle(x0, y0, x1, y1, outline="red", tag="rect")
 
 
 
