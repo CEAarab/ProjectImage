@@ -3,6 +3,9 @@
 import tkinter as tk
 from tkinter import ttk, filedialog
 
+import tk_tools
+
+
 from parameter import Parameter
 from Interface.imageViewer import ImageViewer
 
@@ -125,7 +128,9 @@ class ConfigurationD(tk.Toplevel):
 		self.transient(self.master)
 		self.parameters = parameters
 		self.patches_file = None
+		self.arePatchesLoaded = False
 		self.patche_num = 0
+		self.tableau = None
 
 		self.rect_start = None
 		self.rect_end = None
@@ -138,10 +143,17 @@ class ConfigurationD(tk.Toplevel):
 		self.selectionGrid = None
 		self.nRows = 4
 		self.nCols = 6
+
 		self.rowsScale = 0.6 #linked to width parameter in app
+		self.scale1 = None
 		self.rowsSizes = None
+
 		self.colsScale = 0.6 #linked to heigth parameter in app
+		self.scale2 = None
 		self.colsSizes = None
+
+		self.manual_selection = False  # Set to True for manual selection, False for automatic selection
+
 
 
 
@@ -150,6 +162,7 @@ class ConfigurationD(tk.Toplevel):
 		self.x = (self.winfo_screenwidth()/2) - (self.window_width/2)
 		self.geometry("%dx%d+%d+%d" % (self.window_width, self.window_height, self.x, 20))
 
+		self.sel_button = None
 		self.initWidget()
 
 
@@ -160,34 +173,55 @@ class ConfigurationD(tk.Toplevel):
 		self.image_viewer = ImageViewer(self.frame_image)
 
 		ttk.Button(self.frame_controls, text='Charger', width=12, takefocus=False, cursor='hand2', command=self.loadPatches).pack(side='left')
+		self.sel_button = ttk.Button(self.frame_controls, text='Sélection manuelle', width=25, takefocus=False, cursor='hand2', command=self.switchMode)
+		self.sel_button.pack(side='left')
 		ttk.Button(self.frame_controls, text='OK', width=12, takefocus=False, cursor='hand2', command=self.validatePatches).pack(side='right')
 		ttk.Button(self.frame_controls, text='Aide', width=12, takefocus=False, cursor='hand2', command=self.displayHelp).pack(side='right', padx=PAD)
 		ttk.Button(self.frame_controls, text='Annuler', width=12, takefocus=False, cursor='hand2', command=self.destroy).pack(side='right')
 		self.label = tk.Label(self, text='Chargez les images des patches')
 		self.label.place(rely=.5, relx=.5, anchor='center')
 
-		self.manual_selection = False  # Set to True for manual selection, False for automatic selection
-
-		if self.manual_selection :
-			# Configuration des events pour dessiner les contours de patchs
-			self.image_viewer.bind("<Button-1>", self.onClick_manual)
-			self.image_viewer.bind("<B1-Motion>", self.onDrag_manual)
-			self.image_viewer.bind("<ButtonRelease-1>", self.onRelease_manual)
-
-		else :
-			# Configuration des events pour créer la grille des patchs
-			self.image_viewer.bind("<Button-1>", self.onClick_autom)
-			'''
-			self.image_viewer.bind("<B1-Motion>", self.onDrag_autom)
-			'''
-			self.image_viewer.bind("<Motion>", self.whenDrawing)
-			self.image_viewer.bind("<ButtonRelease-1>", self.onRelease_autom)
-		
 		self.frame_controls.pack(pady=PAD, padx=2*PAD, side='bottom', fill='x')
 		self.frame_image.pack(side='left', fill='both', expand=True)
 		self.image_viewer.pack(padx=PAD)
+
+		# Configuration des events pour créer la grille des patchs
+		self.image_viewer.bind("<Button-1>", self.onClick_autom)
+		self.image_viewer.bind("<Motion>", self.whenDrawing)
+		self.image_viewer.bind("<B1-Motion>", self.whenDrawing)
+		self.image_viewer.bind("<ButtonRelease-1>", self.onRelease_autom)
+
+		self.frame_info = tk.Frame(self)
+		self.frame_info.pack(side='right',padx=PAD)
 		
 
+	#Passer entre les modes manuel et automatique de sélection des patchs
+	def switchMode(self) :
+		self.manual_selection = not(self.manual_selection) #Passage dans l'autre mode manuel/automatique
+		if self.tableau != None :
+			#Supprime tous les patchs précédents
+			self.D = np.zeros_like(self.D)
+			self.tableau.delete(*self.tableau.get_children()) 
+		if self.manual_selection :
+			# Configuration des events pour dessiner les contours de patchs
+			self.image_viewer.bind("<Button-1>", self.onClick_manual)
+			self.image_viewer.bind("<Motion>", None)
+			self.image_viewer.bind("<B1-Motion>", self.onDrag_manual)
+			self.image_viewer.bind("<ButtonRelease-1>", self.onRelease_manual)
+			self.sel_button["text"] = 'Sélection automatique'
+		else :
+			# Configuration des events pour créer la grille des patchs
+			self.image_viewer.bind("<Button-1>", self.onClick_autom)
+			self.image_viewer.bind("<Motion>", self.whenDrawing)
+			self.image_viewer.bind("<B1-Motion>", self.whenDrawing)
+			self.image_viewer.bind("<ButtonRelease-1>", self.onRelease_autom)
+			self.sel_button["text"] = 'Sélection manuelle'
+
+
+		if self.arePatchesLoaded :
+			self.display_changes()
+
+	
 
 	# Charge un fichier TIFF, doit être l'image des patches
 	def loadPatches(self):
@@ -207,13 +241,40 @@ class ConfigurationD(tk.Toplevel):
 		self.image_viewer.updateImages(self.img)
 		self.image_viewer.displayImage()
 		self.displayTableau()
+		self.display_changes()
+		self.arePatchesLoaded = True
+
+
+	def display_changes(self):
+		
+		# Afficher ou non tous les paramètres liés à la sélection automatique
+			
+		if self.manual_selection :
+			# Suppression des curseurs
+			if self.scale2 != None :
+				self.scale1.destroy()
+				self.scale2.destroy()
+			self.image_viewer.delete('polygon')
+			self.image_viewer.delete('selectionGrid')
+		
+		else :
+			# Curseurs pour modifier les paramètres du tracé
+			# Créer un curseur (Scale) allant de 0 à 1
+			self.scale1 = tk.Scale(self.frame_info, from_=0, to=100, label="hauteur des cases", resolution=1, orient="horizontal", command=self.update_colsScale)
+			self.scale1.set(100*self.rowsScale)
+			self.scale1.pack(side = 'bottom')
+			self.scale2 = tk.Scale(self.frame_info, from_=0, to=100, label="largeur des cases", resolution=1, orient="horizontal", command=self.update_rowsScale)
+			self.scale2.set(100*self.colsScale)
+			self.scale2.pack(side = 'bottom')
+
+			self.image_viewer.delete('rect')
+			self.polygon = []
+
+
 
 
 	def displayTableau(self):
-
-		self.frame_info = tk.Frame(self)
-		self.frame_info.pack(side='right',padx=PAD)
-
+		
 		self.tableau = ttk.Treeview(self.frame_info, columns=list(range(1, 17)), show="headings", height=25)
 		hsb = ttk.Scrollbar(self.frame_info, orient="horizontal", command=self.tableau.xview)
 		self.tableau.configure(xscrollcommand=hsb.set)
@@ -224,7 +285,22 @@ class ConfigurationD(tk.Toplevel):
 		for i in range(16):
 			self.tableau.heading(i, text=str(i))
 			self.tableau.column(str(i), width=50)
+		
 
+
+
+	def update_colsScale(self, value) :
+		self.colsScale = 0.15 + float(value)/120
+		if self.selectionGrid != None :
+			self.drawGrid()
+	
+
+	def update_rowsScale(self, value) :
+		self.rowsScale = 0.15 + float(value)/120
+		if self.selectionGrid != None :
+			self.drawGrid()
+
+	
 
 	# Met à jour la matrice D et calcule la matrice Q
 	def validatePatches(self):
@@ -247,20 +323,26 @@ class ConfigurationD(tk.Toplevel):
 		self.patche_num -= 1
 		for item in sel:
 			self.tableau.delete(item)
+			self.displayTableau()
 
 
 	# Fenêtre d'aide pour l'utilisateur
 	def displayHelp(self):
+		if self.manual_selection :
+			self.aide = tk.Toplevel(self)
+			self.aide.title('Aide')
 
-		self.aide = tk.Toplevel(self)
-		self.aide.title('Aide')
-
-		self.img_aide = Image.open("icons/image_aide.jpg")
-		self.img_aide = ImageTk.PhotoImage(self.img_aide)
-		tk.Label(self.aide, image=self.img_aide).grid(column=0, row=0)
-		tk.Label(self.aide, 
-				 text="1. Charger l'image des patches.\n2. Sélectionner les patches dans l'ordre.\n3. Les rectangles de sélection ne doivent pas être trop près des bords du patches.",
-				 justify="left").grid(column=1, row=0, sticky='n', pady=PAD)
+			self.img_aide = Image.open("icons/image_aide.jpg")
+			self.img_aide = ImageTk.PhotoImage(self.img_aide)
+			tk.Label(self.aide, image=self.img_aide).grid(column=0, row=0)
+			tk.Label(self.aide, 
+					text="1. Charger l'image des patches.\n2. Sélectionner les patches dans l'ordre.\n3. Les rectangles de sélection ne doivent pas être trop près des bords du patches.",
+					justify="left").grid(column=1, row=0, sticky='n', pady=PAD)
+			#mettre à jour ce guide ?
+			
+		else :
+			#guide pour la sélection automatique : dessin / supprimer / échap / switch mode si ça marche pas
+			pass
 
 
 
@@ -310,26 +392,20 @@ class ConfigurationD(tk.Toplevel):
 	## méthode à favoriser : positionner un point aux quatre coins de la grille et obtenir immédiatement la grille adaptée
 
 	def onClick_autom(self, event):
-
+			#inutile dans la configuration actuelle
 
 	
 		'''
-		# Add the clicked point to the polygon
 		if len(self.polygon)==0 :
 			self.drawLock=False
 			#? self.waitConfirm = False
-
-		if len(self.polygon)==5 : # exception len(polygon) is somehow greater than 4
-			self.polygon = []
 		'''
-		pass
+		if len(self.polygon)==4 : # start to make a new polygon
+			self.image_viewer.delete('polygon')
+			self.polygon = []
+			self.image_viewer.delete('selectionGrid')
+			self.drawLock = False
 
-	'''
-	def onDrag_autom(self, event):
-		# Update the last point of the polygon during drag
-		self.polygon[-1] = (event.x, event.y)
-		self.drawPolygon()
-	'''
 
 	def whenDrawing(self, event) :
 		self.drawLock = False #débloquer le dessin après un mouvement de souris
@@ -353,18 +429,24 @@ class ConfigurationD(tk.Toplevel):
 			self.drawPolygon()
 			# Adapte la grille au quadrilatère tracé, selon les paramètres donnés
 			self.selectionGrid = self.createGrid()
-			# Clear the drawn polygon
-			'''self.image_viewer.delete('polygon')'''
-			# Clear the corners list
-			## if confirm : #une fois que l'utilisateur a confirmé son tracé
-			##self.polygon = []
-
-			## jauges d'ajustement des paramètres
+			
 			self.drawGrid()
 			#? self.waitConfirm = True
-			self.polygon = []
-			self.drawLock = False
 
+			'''
+			
+			
+			
+			
+			
+			
+			self.polygon = []
+
+
+
+
+
+			'''
 
 
 
@@ -473,19 +555,6 @@ class ConfigurationD(tk.Toplevel):
 			self.image_viewer.create_rectangle(topleft[0], topleft[1], bottomright[0], bottomright[1], outline="blue", fill="", tag="selectionGrid")
 			temp.append([topleft, bottomright])
 
-		'''
-		
-		# re-order the boxes in temp
-
-		# actually no, my bad lol
-
-		for i in range(self.nRows//2):
-			for j in range(self.nCols//2):
-				index1 = (2*i+1)*self.nCols +j
-				index2 = 2*(i+1)*(self.nCols) - (j+1)
-				temp[index1], temp[index2] = temp[index2], temp[index1]
-
-		'''
 
 		for k in range(gridSize):
 			# for each box, take the "start" and "end" x-y values
@@ -504,12 +573,16 @@ class ConfigurationD(tk.Toplevel):
 			'''
 			self.moy(start, end)
 
+		self.patche_num = 0 #au cas où le joueur changerait de mode de sélection
+
 
 
 
 
 	# Moyenne de la valeur des pixel dans le carré sélectionné ; cas d'un rectangle
 	def moy(self, start, end):
+		if self.patche_num == 0 :
+			self.tableau.delete(*self.tableau.get_children())
 		for i in range(len(self.img)):
 			square = self.img[i][start[1]:end[1], start[0]:end[0]]
 			if 0 in square.shape: # Si rectangle vide
