@@ -328,20 +328,24 @@ class ConfigurationD(tk.Toplevel):
 
 	# Fenêtre d'aide pour l'utilisateur
 	def displayHelp(self):
+		self.aide = tk.Toplevel(self)
+		self.aide.title('Aide')
+		
 		if self.manual_selection :
-			self.aide = tk.Toplevel(self)
-			self.aide.title('Aide')
-
 			self.img_aide = Image.open("icons/image_aide.jpg")
 			self.img_aide = ImageTk.PhotoImage(self.img_aide)
 			tk.Label(self.aide, image=self.img_aide).grid(column=0, row=0)
 			tk.Label(self.aide, 
-					text="1. Charger l'image des patches.\n2. Sélectionner les patches dans l'ordre.\n3. Les rectangles de sélection ne doivent pas être trop près des bords du patches.",
+					text="1. Charger l'image des patches.\n\n2. Sélectionner les patches dans l'ordre.\n\n3. Les rectangles de sélection ne doivent pas être trop près des bords du patches.\n\n\nNote : Vous pouvez sélectionner rapidement vos patchs en utilisant la 'Sélection automatique'.",
 					justify="left").grid(column=1, row=0, sticky='n', pady=PAD)
 			#mettre à jour ce guide ?
 			
 		else :
-			#guide pour la sélection automatique : dessin / supprimer / échap / switch mode si ça marche pas
+			#guide pour la sélection automatique
+			self.img_aide = None
+			tk.Label(self.aide, 
+					text="1. Charger l'image des patches.\n\n2. Positionner 4 points pour encadrer l'ensemble des patchs.\n'échap' permet d'interrompre le tracé.\n\n3. Assurez-vous que la grille générée s'inscrit correctement dans les patchs.\nVous pouvez ajuster la largeur et la hauteur des cases en déplaçant les curseurs correspondants,\nlaissez cependant quelques millimètres de distance avec les bords.\nPlacer un nouveau point permet de recommencer et créer une nouvelle figure.\n\n4. Appuyer sur 'OK' pour confirmer les valeurs de vos patchs.\n\nNote : si cette sélection automatique ne convient pas,\n appuyez sur 'Sélection manuelle' pour enregistrer manuellement vos patchs.",
+					justify="left").grid(column=1, row=0, sticky='n', pady=PAD)
 			pass
 
 
