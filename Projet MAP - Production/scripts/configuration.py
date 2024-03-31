@@ -260,11 +260,11 @@ class ConfigurationD(tk.Toplevel):
 		else :
 			# Curseurs pour modifier les paramètres du tracé
 			# Créer un curseur (Scale) allant de 0 à 1
-			self.scale1 = tk.Scale(self.frame_info, from_=0, to=100, label="hauteur des cases", resolution=1, orient="horizontal", command=self.update_colsScale)
-			self.scale1.set(100*self.rowsScale)
+			self.scale1 = tk.Scale(self.frame_info, from_=0, to=100, label="Hauteur des cases", resolution=1, orient="horizontal", command=self.update_colsScale)
+			self.scale1.set(130*self.colsScale-0.15)
 			self.scale1.pack(side = 'bottom')
-			self.scale2 = tk.Scale(self.frame_info, from_=0, to=100, label="largeur des cases", resolution=1, orient="horizontal", command=self.update_rowsScale)
-			self.scale2.set(100*self.colsScale)
+			self.scale2 = tk.Scale(self.frame_info, from_=0, to=100, label="Largeur des cases", resolution=1, orient="horizontal", command=self.update_rowsScale)
+			self.scale2.set(130*self.rowsScale-0.15)
 			self.scale2.pack(side = 'bottom')
 
 			self.image_viewer.delete('rect')
@@ -290,13 +290,13 @@ class ConfigurationD(tk.Toplevel):
 
 
 	def update_colsScale(self, value) :
-		self.colsScale = 0.15 + float(value)/120
+		self.colsScale = 0.15 + float(value)/130
 		if self.selectionGrid != None :
 			self.drawGrid()
 	
 
 	def update_rowsScale(self, value) :
-		self.rowsScale = 0.15 + float(value)/120
+		self.rowsScale = 0.15 + float(value)/130
 		if self.selectionGrid != None :
 			self.drawGrid()
 
