@@ -308,7 +308,7 @@ class ConfigurationD(tk.Toplevel):
 	
 
 	# Met à jour la matrice D et calcule la matrice Q
-	def validatePatches(self, any):
+	def validatePatches(self, any=None):
 		
 		self.parameters.D = self.D
 		#np.savetxt('mon_tableau_mac_50.csv', self.D, delimiter=',')
