@@ -11,7 +11,7 @@ from Algo.fausseCouleur import fausseCouleur, fausseCouleur2Points
 from Algo.spectro import cubeMS
 
 from parameter import Parameter
-from Interface.configuration import ConfigurationR, ConfigurationD
+from Interface.configuration import ConfigurationR, ConfigurationD#, ConfigurationA
 
 import numpy as np
 import cv2
@@ -140,7 +140,8 @@ class Interface(tk.Tk):
 
 		self.btn_cube_MS = ttk.Button(self.frame_menu, takefocus=False, text='Cube MS',
 										   	   cursor='hand2', command=self.displayMenuMS, style='M.TButton')
-
+		self.btn_reset = ttk.Button(self.frame_menu, takefocus=False, cursor='hand2',
+												 text="Reset", command=self.reset, style='M.TButton')
 		self.btn_back = ttk.Button(self.frame_menu, takefocus=False, text='<',
 								   cursor='hand2', command=self.backToMainMenu, style='M.TButton')
 
@@ -149,6 +150,7 @@ class Interface(tk.Tk):
 		self.btn_registration_auto.pack(fill='x', ipady=PAD)
 		self.btn_fausses_couleurs.pack(fill='x', ipady=PAD)
 		self.btn_cube_MS.pack(fill='x', ipady=PAD)
+		self.btn_reset.pack(side='bottom', pady=PAD, padx=PAD, fill='x', ipady=PAD)
 
 
 	# Menu pour la registration
@@ -320,7 +322,15 @@ class Interface(tk.Tk):
 			self.D_entry.insert(0, self.parameters.D)
 		self.btn_load_D = ttk.Button(self.frame_D, takefocus=False, cursor='hand2',
 									   text='...', style='M.TButton', command=lambda : ConfigurationD(self, self.parameters))
-
+		"""	   
+		self.frame_DA = tk.Frame(self.frame_menu, bg=COLOR_MENU)
+		self.DA_label = ttk.Label(self.frame_DA, text="Couleurs des patches (Automatique)", style='M.TLabel')
+		self.DA_entry = tk.Entry(self.frame_DA)
+		if self.parameters.D.shape != (0, 0):
+			self.DA_entry.insert(0, self.parameters.D)
+		self.btn_load_DA = ttk.Button(self.frame_DA, takefocus=False, cursor='hand2',
+									   text='...', style='M.TButton', command=lambda : ConfigurationA(self, self.parameters))
+		"""
 		self.frame_white = tk.Frame(self.frame_menu, bg=COLOR_MENU)
 		self.white_var = tk.StringVar()
 		self.white_label = ttk.Label(self.frame_white, style='M.TLabel', textvariable=self.white_var)
@@ -354,7 +364,12 @@ class Interface(tk.Tk):
 		self.D_label.pack(side='top', anchor='w', padx=5)
 		self.D_entry.pack(fill='x', side='left', expand=True, padx=5)
 		self.btn_load_D.pack(side='right', padx=5)
-
+		"""
+		self.frame_DA.pack(fill='x', pady=PAD)
+		self.DA_label.pack(side='top', anchor='w', padx=5)
+		self.DA_entry.pack(fill='x', side='left', expand=True, padx=5)
+		self.btn_load_DA.pack(side='right', padx=5)
+"""
 		self.frame_white.pack(fill='x', pady=PAD)
 		self.white_label.pack(side='top', anchor='w', padx=5)
 		self.white_entry.pack(fill='x', side='left', expand=True, padx=5)
@@ -434,7 +449,26 @@ class Interface(tk.Tk):
 		self.image_viewer.updateImages(self.tiff_array_16bits)
 		self.image_viewer.displayImage()
 
+	def reset(self):
+		# Vérifie si un fichier est selectionné
+		if len(self.file) == 0: return
+			
+		if self.is_FC_display:
+			self.is_FC_display = False
+			self.label_comb.place_forget()
 
+		# Met à jour l'affichage
+		if self.tiff_array_16bits == None: # Si pas d'images déja affichées
+			self.menu_file.entryconfig("Sauvegarder", state="normal")
+			self.frame_laod.place_forget()
+			self.displayFrameMenu()
+			self.displayFrameMain()
+		else:
+			self.backToMainMenu()
+
+		self.getDataImage()
+		self.image_viewer.updateImages(self.tiff_array_16bits)
+		self.image_viewer.displayImage()
 	# Ouvre fichier TIFF et ses métadonnées
 	def getDataImage(self):
 
@@ -596,6 +630,7 @@ class Interface(tk.Tk):
 
 		#if not self.checkParamMS(): return
 		self.parameters.calcQ()
+
 		self.cube_MS = cubeMS(self.tiff_array_16bits, self.parameters.Q)
 
 		# Mise à jour de l'affichage
@@ -701,7 +736,7 @@ class Interface(tk.Tk):
 			return
 		else:
 			for canva in self.image_viewer.canvas_points:
-				canva.config(width=self.parameters.size_ROIS+1, height=self.parameters.size_ROIS+1)
+				canvas_points.config(width=self.parameters.size_ROIS+1, height=self.parameters.size_ROIS+1)
 
 
 	# Sauvegarder images affichées en TIFF
